@@ -1,0 +1,170 @@
+# ════════════════════════════════════════════════════════════════════════════
+# plantid.sh — Multilingual Plant & Pesticide Identifier (India Edition v3.0)
+# Requirements / Dependency List
+# ════════════════════════════════════════════════════════════════════════════
+#
+# This is NOT a Python requirements.txt (plantid.sh is a pure bash script with
+# no Python dependencies of its own).  This file lists the SYSTEM tools that
+# the script depends on, with install commands for each major distribution.
+#
+# Quick install on Debian / Ubuntu:
+#   sudo apt update
+#   sudo apt install -y curl jq python3 chafa zbar-tools
+#   # Optional:
+#   sudo apt install -y translate-shell
+#
+# See README.md for full setup instructions.
+# ════════════════════════════════════════════════════════════════════════════
+
+
+# ─── MANDATORY DEPENDENCIES ─────────────────────────────────────────────────
+# The script will refuse to run without these.
+
+curl                  # HTTP client — used for every API call
+                      # Debian/Ubuntu: sudo apt install -y curl
+                      # Fedora/RHEL:   sudo dnf install -y curl
+                      # Arch:          sudo pacman -S --needed curl
+                      # macOS:         brew install curl (preinstalled)
+                      # Minimum version: any (tested with 7.x and 8.x)
+
+jq                    # JSON parser — parses every API response
+                      # Debian/Ubuntu: sudo apt install -y jq
+                      # Fedora/RHEL:   sudo dnf install -y jq
+                      # Arch:          sudo pacman -S --needed jq
+                      # macOS:         brew install jq
+                      # Minimum version: 1.6+ recommended (for @uri filter)
+
+bash >= 4.0           # Shell interpreter — uses associative arrays (declare -A)
+                      # Debian/Ubuntu: preinstalled (/bin/bash is 5.x)
+                      # Fedora/RHEL:   preinstalled
+                      # Arch:          preinstalled
+                      # macOS:         brew install bash (default /bin/bash is 3.2 — too old!)
+
+
+# ─── STRONGLY RECOMMENDED ────────────────────────────────────────────────────
+# The script works without these, but loses key features.
+
+python3               # Used for HTML escaping, sentence deduplication,
+                      # regex-based descriptor stripping (pesticide mode),
+                      # and URL-encoding fallback when jq is unavailable.
+                      # WITHOUT python3:
+                      #   - Pesticide descriptor stripping falls back to a
+                      #     crude bash pattern match (less accurate)
+                      #   - HTML log escaping falls back to a perl one-liner
+                      #     (works but produces slightly different output)
+                      #   - Wikipedia extract deduplication is skipped
+                      #     (may see duplicate sentences in some articles)
+                      # Debian/Ubuntu: sudo apt install -y python3
+                      # Fedora/RHEL:   sudo dnf install -y python3
+                      # Arch:          sudo pacman -S --needed python
+                      # macOS:         brew install python
+                      # Minimum version: 3.6+ (uses f-strings)
+
+chafa                 # Renders matched images inline in the terminal.
+                      # WITHOUT chafa: the image path is still printed,
+                      # but no image is shown in the terminal.
+                      # Debian/Ubuntu: sudo apt install -y chafa
+                      # Fedora/RHEL:   sudo dnf install -y chafa
+                      # Arch:          sudo pacman -S --needed chafa
+                      # macOS:         brew install chafa
+                      # Minimum version: 1.8+ for --size flag
+
+zbar-tools            # Provides `zbarimg` — detects barcodes inside photos.
+                      # WITHOUT zbar-tools: photo mode (option 4) skips the
+                      # barcode-in-photo detection step and goes straight to
+                      # plant identification.
+                      # Debian/Ubuntu: sudo apt install -y zbar-tools
+                      # Fedora/RHEL:   sudo dnf install -y zbar
+                      # Arch:          sudo pacman -S --needed zbar
+                      # macOS:         brew install zbar
+
+
+# ─── OPTIONAL DEPENDENCIES ──────────────────────────────────────────────────
+# Used only as fallbacks; the script degrades gracefully without them.
+
+translate-shell       # Provides the `trans` command — translation fallback
+                      # when AI4Bharat Bhashini (Indian Gov) is unreachable
+                      # on your network.
+                      # WITHOUT translate-shell: UI strings and Wikipedia
+                      # extracts fall back to English when Bhashini is down,
+                      # and the static transliteration table kicks in for
+                      # the ~100 common Indian crop names.
+                      # Debian/Ubuntu: sudo apt install -y translate-shell
+                      # Fedora/RHEL:   sudo dnf install -y translate-shell
+                      # Arch:          sudo pacman -S --needed translate-shell
+                      # macOS:         brew install translate-shell
+
+perl                  # Used only as a last-resort fallback for HTML
+                      # escaping and URL encoding when python3 AND jq
+                      # are both unavailable.  Almost always preinstalled.
+                      # Debian/Ubuntu: preinstalled
+                      # Fedora/RHEL:   preinstalled
+                      # Arch:          preinstalled
+                      # macOS:         preinstalled
+
+base64                # Used for embedding matched images as base64 data
+                      # URIs in the HTML log.  Almost always preinstalled
+                      # (coreutils on Linux, /usr/bin/base64 on macOS).
+                      # Debian/Ubuntu: preinstalled (coreutils)
+                      # Fedora/RHEL:   preinstalled (coreutils)
+                      # Arch:          preinstalled (coreutils)
+                      # macOS:         preinstalled
+
+xdg-utils             # Provides `xdg-open` — opens the HTML log in your
+                      # default browser when you run `./plantid.sh --log-html`.
+                      # WITHOUT xdg-utils: the script prints the file path
+                      # and asks you to open it manually.
+                      # Debian/Ubuntu: sudo apt install -y xdg-utils
+                      # Fedora/RHEL:   sudo dnf install -y xdg-utils
+                      # Arch:          sudo pacman -S --needed xdg-utils
+                      # macOS:         not needed (uses `open`)
+
+
+# ─── EXTERNAL API KEYS (only if you use photo mode) ─────────────────────────
+#
+# Pl@ntNet API key — required ONLY for the --photo plant identification mode
+# (option 4 in the menu).  NOT needed for name, pesticide, or barcode modes.
+#
+# Get a FREE key at: https://my.plantnet.org/account/
+#
+# Create a config file in the same folder as plantid.sh:
+#   echo 'PLANTNET_API_KEY=your_key_here' > plantid.conf
+#   chmod 600 plantid.conf    # protect the key from other users
+#
+# The script reads this file automatically — no other configuration needed.
+
+
+# ─── NETWORK REQUIREMENTS ───────────────────────────────────────────────────
+#
+# The script makes outbound HTTPS requests to these endpoints:
+#
+#   https://{lang}.wikipedia.org/api/rest_v1/page/summary/{name}
+#       — Indic Wikipedia REST API (one per --name lookup)
+#
+#   https://{lang}.wikipedia.org/w/api.php?action=opensearch&...
+#       — Indic Wikipedia opensearch (fallback when summary 404s)
+#
+#   https://en.wikipedia.org/api/rest_v1/page/summary/{name}
+#       — English Wikipedia fallback (when Indic Wikipedia has no article)
+#
+#   https://nlp-pipeline.sangam.bhashini.gov.in/pipeline
+#       — AI4Bharat Bhashini (Indian Gov) translation service
+#       (Note: this endpoint may be blocked on some networks.  The script
+#        falls back to the static transliteration table when unreachable.)
+#
+#   https://smartsearch.gs1india.org/api/gtin/{code}
+#       — GS1 India SmartSearch (Indian barcode registry)
+#
+#   https://world.openfoodfacts.org/api/v2/product/{code}.json
+#       — Open Food Facts (French non-profit, Indian product catalogue)
+#
+#   https://my-api.plantnet.org/v2/identify/all?api-key={key}
+#       — Pl@ntNet plant identification (only for --photo mode)
+#
+# All requests use HTTPS with a 25-second timeout (60 seconds for photo
+# uploads).  No inbound ports need to be opened.
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# END OF REQUIREMENTS
+# ════════════════════════════════════════════════════════════════════════════
